@@ -1,126 +1,36 @@
-name: iOS CI
+name: SSH to MacOS VM
 
-  # Run on every push to any branch and on pull‑request events
-  on:
-    push:
-      branches: [ '**' ]
-    pull_request:
-      branches: [ '**' ]
+on: [workflow_dispatch] # Bật thủ công bằng tay
 
-  jobs:
-    build-and-test:
-      runs-on: macos-latest          # macOS provides Xcode & Swift toolchain
-      timeout-minutes: 30
+jobs:
+  ssh-mac:
+    runs-on: macos-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
 
-      steps:
-        # -----------------------------------------------------------------
-        # 1️⃣Checkout the repository
-        # -----------------------------------------------------------------
-        - name: Checkout repository
-          uses: actions/checkout@v4
-
-        # -----------------------------------------------------------------
-        # 2️⃣Set up Xcode (select the latest stable version)
-        # -----------------------------------------------------------------
-        - name: Select Xcode version
-          run: |
-            sudo xcode-select -s /Applications/Xcode_15.4.app   # adjust if you need a specific version
-            sudo xcodebuild -runFirstLaunch
-
-        # -----------------------------------------------------------------
-        # 3️⃣Cache Swift Package Manager dependencies (optional but speeds up)
-        # -----------------------------------------------------------------
-        - name: Cache Swift Packages
-          uses: actions/cache@v4
-          with:
-            path: |
-              ~/.swiftpm
-              **/.swiftpm
-            key: ${{ runner.os }}-swiftpm-${{ hashFiles('**/Package.resolution') }}
-            restore-keys: |
-              ${{ runner.os }}-swiftpm-
-
-        # -----------------------------------------------------------------
-        # 4️⃣Resolve Swift Package dependencies (if any)
-        # -----------------------------------------------------------------
-        - name: Resolve Swift Package Dependencies
-          run: |
-            swift package resolve
-
-        # -----------------------------------------------------------------
-        # 5️⃣Build the app for the iOS Simulator (Debug configuration)
-        # -----------------------------------------------------------------
-        - name: Build for iOS Simulator (Debug)
-          id: build_debug
-          run: |
-            xcodebuild \
-              -workspace BurstClientApp.xcworkspace \
-              -scheme BurstClientApp \
-              -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
-              -configuration Debug \
-              clean build \
-              | xcpretty
-
-        # -----------------------------------------------------------------
-        # 6️⃣(Optional) Build for a generic iOS device (Release) – useful for archiving
-        # -----------------------------------------------------------------
-        - name: Build for generic iOS device (Release)
-          id: build_release
-          if: github.ref == 'refs/heads/main'   # only on main branch, for example
-          run: |
-            xcodebuild \
-              -workspace BurstClientApp.xcworkspace \
-              -scheme BurstClientApp \
-              -destination 'generic/platform=iOS' \
-              -configuration Release \
-              clean archive \
-              -archivePath ./Build/BurstClientApp.xcarchive \
-              | xcpretty
-
-        # -----------------------------------------------------------------
-        # 7️⃣Run unit tests (if you have a test target)
-        # -----------------------------------------------------------------
-        - name: Run Tests
-          if: always()   # we still want to see the outcome even if build failed
-          run: |
-            xcodebuild test \
-              -workspace BurstClientApp.xcworkspace \
-              -scheme BurstClientApp \
-              -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
-              -enableCodeCoverage YES \
-              | xcpretty
-
-        # -----------------------------------------------------------------
-        # 8️⃣Generate UI preview PNG via the supplied Swift script
-        # -----------------------------------------------------------------
-        - name: Generate Preview PNG
-          id: preview
-          run: |
-            chmod +x make_preview.swift
-            ./make_preview.swift
-          continue-on-error: true   # we still want to upload artifacts even if preview fails
-
-        # -----------------------------------------------------------------
-        # 9️⃣Upload artifacts (preview image, built .app, .xcarchive if present)
-        # -----------------------------------------------------------------
-        - name: Upload preview PNG
-          if: steps.preview.outcome == 'success'
-          uses: actions/upload-artifact@v4
-          with:
-            name: preview-png
-            path: BurstClientPreview.png
-
-        - name: Upload Debug .app bundle
-          if: steps.build_debug.outcome == 'success'
-          uses: actions/upload-artifact@v4
-          with:
-            name: debug-app
-            path: |
-              **/Build/Products/Debug-iphonesimulator/BurstClientApp.app
-
-        - name: Upload Release .xcarchive (if built)
-          if: steps.build_release.outcome == 'success'
-          uses: actions/upload-artifact@v4
-          with:
-            name: release-archive
-            path: Build/BurstClientApp.xcarchive
+    - name: Cài đặt Ngrok và Kích hoạt SSH
+      env:
+        NGROK_TOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+      run: |
+        # Cài đặt ngrok qua Homebrew có sẵn trên Mac
+        brew install ngrok/ngrok/ngrok
+        ngrok config add-authtoken $NGROK_TOKEN
+        
+        # Đặt mật khẩu cho user hiện tại (runner) để bạn đăng nhập SSH
+        echo "runner:MySecurePassword123" | sudo chpasswd
+        
+        # Bật dịch vụ SSH trên macOS
+        sudo systemsetup -setremotelogin on
+        
+        # Mở cổng SSH (22) ra internet thông qua Ngrok
+        echo "Mở cổng SSH..."
+        ngrok tcp 22 &
+        
+        # Đợi một chút để Ngrok lấy URL
+        sleep 5
+        curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url'
+        
+        # Giữ cho máy ảo chạy liên tục trong 5 tiếng để bạn thao tác
+        echo "Máy ảo sẽ giữ kết nối trong 5 tiếng. Đang đợi bạn..."
+        sleep 18000
