@@ -1,4 +1,4 @@
-name: SSH to MacOS VM (Pinggy Fix)
+name: SSH to MacOS VM (Pinggy No-Pass)
 
 on: [workflow_dispatch]
 
@@ -11,26 +11,29 @@ jobs:
 
     - name: Khởi tạo SSH với Pinggy
       run: |
-        # 1. Đổi mật khẩu cho user 'runner' để bạn đăng nhập
-        echo "runner:MySecurePassword123" | sudo chpasswd
+        # 1. Tự động lấy Public Key từ tài khoản GitHub của bạn để cấp quyền SSH
+        mkdir -p ~/.ssh
+        curl -s https://github.com/${{ github.actor }}.keys >> ~/.ssh/authorized_keys
+        chmod 700 ~/.ssh
+        chmod 600 ~/.ssh/authorized_keys
         
-        # 2. Bật dịch vụ SSH trên hệ điều hành macOS của máy ảo
+        # 2. Bật dịch vụ SSH trên hệ điều hành macOS
         sudo systemsetup -setremotelogin on
         
-        # 3. Chạy Pinggy ngầm để lấy cổng SSH công khai, ghi log ra file pinggy.log
-        ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 \(at)a.pinggy.io R:22:localhost:22 > pinggy.log &
+        # 3. Chạy Pinggy ngầm để mở cổng SSH công khai, lưu log ra file
+        ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 @a.pinggy.io R:22:localhost:22 > pinggy.log &
         
-        # 4. Đợi 5 giây để Pinggy thiết lập kết nối
+        # 4. Đợi 5 giây để đường truyền ổn định
         sleep 5
         
-        # 5. Đọc file log và in ra thông tin kết nối cho bạn thấy
+        # 5. In thông tin kết nối lên màn hình log cho bạn lấy
         echo "=========================================================="
-        echo " THÔNG TIN KẾT NỐI MÁY ẢO CỦA BẠN:"
+        echo "THÔNG TIN KẾT NỐI MÁY ẢO CỦA BẠN:"
         cat pinggy.log | grep -E "ssh -p|http" || cat pinggy.log
-        echo "Mật khẩu đăng nhập: MySecurePassword123"
+        echo "Kết nối trực tiếp qua Private Key từ máy tính của bạn (Không cần mật khẩu)"
         echo "=========================================================="
         
-        # 6. Vòng lặp in log liên tục (Print giữ máy sống trong 5 tiếng)
+        # 6. Vòng lặp in log giữ máy ảo sống trong 5 tiếng
         echo "Bắt đầu giữ kết nối máy ảo..."
         SEC=0
         while [ $SEC -lt 18000 ]; do
