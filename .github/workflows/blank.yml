@@ -1,4 +1,4 @@
-name: SSH to MacOS VM (Pinggy Print Fix)
+name: SSH to MacOS VM (Pinggy Fixed Ultimate)
 
 on: [workflow_dispatch]
 
@@ -11,40 +11,39 @@ jobs:
 
     - name: Khởi tạo SSH với Pinggy
       run: |
-        # 1. Tự động lấy Public Key từ tài khoản GitHub của bạn để cấp quyền SSH
+        # 1. Nạp SSH Public Key từ tài khoản GitHub của bạn để không cần mật khẩu
         mkdir -p ~/.ssh
         curl -s https://github.com/${{ github.actor }}.keys >> ~/.ssh/authorized_keys
         chmod 700 ~/.ssh
         chmod 600 ~/.ssh/authorized_keys
         
-        # 2. Bật dịch vụ SSH trên hệ điều hành macOS
+        # 2. Bật dịch vụ SSH của hệ điều hành macOS
         sudo systemsetup -setremotelogin on
         
-        # 3. Chạy Pinggy ngầm và ghi toàn bộ luồng log ra file pinggy.log
-        ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 @a.pinggy.io R:22:localhost:22 > pinggy.log 2>&1 &
-        
-        # 4. Vòng lặp PRINT LOG liên tục cho đến khi tìm thấy link kết nối từ Pinggy
+        # 3. Chạy Pinggy bằng lệnh chuẩn không lỗi trên Mac, dump thông tin trực tiếp
         echo "=========================================================="
-        echo "ĐANG ĐỢI PINGGY CẤP ĐƯỜNG DẪN SSH..."
+        echo " ĐANG KHỞI TẠO ĐƯỜNG TRUYỀN PINGGY... XIN CHỜ 5 GIÂY..."
         echo "=========================================================="
         
-        while ! grep -q "ssh -p" pinggy.log; do
-          echo "[Pinggy] Đang kết nối..."
-          cat pinggy.log # Ép print toàn bộ nội dung hiện tại ra màn hình log
-          sleep 2
-        done
+        # Chạy lệnh gọn nhất để lấy cổng SSH từ Pinggy
+        curl -s https://pinggy.io/v2/run | bash -s -- -o StrictHostKeyChecking=no R:22:localhost:22 > pinggy.log 2>&1 &
+        
+        # Đợi 5 giây cho Pinggy tạo xong kết nối
+        sleep 5
         
         echo "=========================================================="
-        echo "THÀNH CÔNG! THÔNG TIN KẾT NỐI MÁY ẢO CỦA BẠN:"
-        grep "ssh -p" pinggy.log
-        echo "Kết nối trực tiếp qua Private Key từ Codespaces (Không cần mật khẩu)"
+        echo "THÔNG TIN KẾT NỐI MÁY ẢO CỦA BẠN:"
+        echo "=========================================================="
+        # Lọc ra dòng chứa lệnh SSH chính xác
+        cat pinggy.log | grep -E "ssh -p" || cat pinggy.log
+        echo "=========================================================="
+        echo "Dán dòng lệnh 'ssh -p ...' ở trên vào Terminal Codespaces để vào máy."
         echo "=========================================================="
         
-        # 5. Vòng lặp in log giữ máy ảo sống trong 5 tiếng
-        echo "Bắt đầu giữ kết nối máy ảo..."
+        # 4. Vòng lặp in log giữ máy ảo sống trong 5 tiếng
         SEC=0
         while [ $SEC -lt 18000 ]; do
-          echo "[Keep-Alive] Máy ảo Mac đang hoạt động. Đã trôi qua: ${SEC} giây."
+          echo "[Keep-Alive] Máy ảo Mac đang hoạt động tích cực. Đã trôi qua: ${SEC} giây."
           sleep 60
           SEC=$((SEC+60))
         done
