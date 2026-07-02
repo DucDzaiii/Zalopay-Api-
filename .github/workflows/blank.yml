@@ -1,6 +1,6 @@
-name: SSH to MacOS VM
+name: SSH to MacOS VM (Ngrok Fix)
 
-on: [workflow_dispatch] # Bật thủ công bằng tay
+on: [workflow_dispatch]
 
 jobs:
   ssh-mac:
@@ -9,28 +9,34 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Cài đặt Ngrok và Kích hoạt SSH
+    - name: Cấu hình và Chạy SSH Ngrok
       env:
         NGROK_TOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
       run: |
-        # Cài đặt ngrok qua Homebrew có sẵn trên Mac
+        # 1. Cài đặt Ngrok
         brew install ngrok/ngrok/ngrok
         ngrok config add-authtoken $NGROK_TOKEN
         
-        # Đặt mật khẩu cho user hiện tại (runner) để bạn đăng nhập SSH
+        # 2. Cấu hình User & Bật SSH trên Mac
         echo "runner:MySecurePassword123" | sudo chpasswd
-        
-        # Bật dịch vụ SSH trên macOS
         sudo systemsetup -setremotelogin on
         
-        # Mở cổng SSH (22) ra internet thông qua Ngrok
-        echo "Mở cổng SSH..."
-        ngrok tcp 22 &
+        # 3. Khởi chạy Ngrok TCP ở chế độ ngầm nhưng ghi log ra file
+        ngrok tcp 22 --log=stdout > ngrok.log &
         
-        # Đợi một chút để Ngrok lấy URL
+        # 4. Đợi 5 giây cho Ngrok khởi tạo xong rồi lấy Link kết nối
         sleep 5
+        echo "=========================================================="
+        echo "ĐƯỜNG DẪN SSH CỦA BẠN:"
         curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url'
+        echo "Mật khẩu đăng nhập: MySecurePassword123"
+        echo "=========================================================="
         
-        # Giữ cho máy ảo chạy liên tục trong 5 tiếng để bạn thao tác
-        echo "Máy ảo sẽ giữ kết nối trong 5 tiếng. Đang đợi bạn..."
-        sleep 18000
+        # 5. Vòng lặp VÔ HẠN (Print giữ máy sống trong 5 tiếng - 18000 giây)
+        echo "Bắt đầu giữ kết nối máy ảo..."
+        SEC=0
+        while [ $SEC -lt 18000 ]; do
+          echo "[Keep-Alive] Máy ảo đang hoạt động bình thường. Đã trôi qua: ${SEC} giây."
+          sleep 60
+          SEC=$((SEC+60))
+        done
