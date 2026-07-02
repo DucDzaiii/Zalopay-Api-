@@ -1,4 +1,4 @@
-name: SSH to MacOS VM (Pinggy No-Pass)
+name: SSH to MacOS VM (Pinggy Print Fix)
 
 on: [workflow_dispatch]
 
@@ -20,20 +20,27 @@ jobs:
         # 2. Bật dịch vụ SSH trên hệ điều hành macOS
         sudo systemsetup -setremotelogin on
         
-        # 3. Chạy Pinggy ngầm để mở cổng SSH công khai, lưu log ra file
-        ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 @a.pinggy.io R:22:localhost:22 > pinggy.log &
+        # 3. Chạy Pinggy ngầm và ghi toàn bộ luồng log ra file pinggy.log
+        ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 @a.pinggy.io R:22:localhost:22 > pinggy.log 2>&1 &
         
-        # 4. Đợi 5 giây để đường truyền ổn định
-        sleep 5
-        
-        # 5. In thông tin kết nối lên màn hình log cho bạn lấy
+        # 4. Vòng lặp PRINT LOG liên tục cho đến khi tìm thấy link kết nối từ Pinggy
         echo "=========================================================="
-        echo "THÔNG TIN KẾT NỐI MÁY ẢO CỦA BẠN:"
-        cat pinggy.log | grep -E "ssh -p|http" || cat pinggy.log
-        echo "Kết nối trực tiếp qua Private Key từ máy tính của bạn (Không cần mật khẩu)"
+        echo "ĐANG ĐỢI PINGGY CẤP ĐƯỜNG DẪN SSH..."
         echo "=========================================================="
         
-        # 6. Vòng lặp in log giữ máy ảo sống trong 5 tiếng
+        while ! grep -q "ssh -p" pinggy.log; do
+          echo "[Pinggy] Đang kết nối..."
+          cat pinggy.log # Ép print toàn bộ nội dung hiện tại ra màn hình log
+          sleep 2
+        done
+        
+        echo "=========================================================="
+        echo "THÀNH CÔNG! THÔNG TIN KẾT NỐI MÁY ẢO CỦA BẠN:"
+        grep "ssh -p" pinggy.log
+        echo "Kết nối trực tiếp qua Private Key từ Codespaces (Không cần mật khẩu)"
+        echo "=========================================================="
+        
+        # 5. Vòng lặp in log giữ máy ảo sống trong 5 tiếng
         echo "Bắt đầu giữ kết nối máy ảo..."
         SEC=0
         while [ $SEC -lt 18000 ]; do
